@@ -1,0 +1,776 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RouterOS</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600;700&family=Inter:wght@300;400;500;600&display=swap');
+:root {
+  --bg:#ffffff;--bg2:#f4f8fb;--panel:#eaf4fa;--panel2:#d6ecf7;
+  --border:#b3d9ee;--bord2:#80c4e4;--accent:#0099cc;--blue:#005f8e;
+  --green:#00a060;--yellow:#d08000;--red:#cc2200;
+  --text:#0a0a0a;--text2:#2a5a78;--text3:#6a9ab8;
+  --mono:'JetBrains Mono',monospace;--sans:'Inter',sans-serif;--r:10px;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:13px;display:flex;flex-direction:column;min-height:100vh}
+
+/* STATUS BAR */
+#sb{background:#0a0a0a;border-bottom:2px solid var(--accent);height:46px;display:flex;align-items:center;padding:0 16px;flex-shrink:0;position:sticky;top:0;z-index:200;overflow-x:auto;scrollbar-width:none}
+#sb::-webkit-scrollbar{display:none}
+.sb-brand{font-family:var(--mono);font-size:13px;font-weight:700;color:var(--accent);letter-spacing:3px;white-space:nowrap;margin-right:14px;text-transform:uppercase;display:flex;align-items:center;gap:9px}
+.sb-brand em{color:#444;font-style:normal}
+.brand-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0;transition:background .4s,box-shadow .4s}
+.brand-dot.green{background:#00d070;box-shadow:0 0 7px #00d07099;animation:bdot 2s ease-in-out infinite}
+.brand-dot.yellow{background:#e0a000;box-shadow:0 0 7px #e0a00099;animation:bdot 1s ease-in-out infinite}
+.brand-dot.red{background:#ff3311;box-shadow:0 0 7px #ff331199;animation:bdot .55s ease-in-out infinite}
+@keyframes bdot{0%,100%{opacity:1}50%{opacity:.2}}
+.sb-sep{width:1px;height:20px;background:#333;margin:0 12px;flex-shrink:0}
+.pill{display:flex;align-items:center;gap:6px;padding:4px 11px;border-radius:20px;border:1px solid #333;background:#1a1a1a;white-space:nowrap;flex-shrink:0;margin-right:7px;font-family:var(--mono);font-size:11px;font-weight:600;color:#666;transition:border-color .3s,color .3s;cursor:default;user-select:none}
+.pill.ok{border-color:rgba(0,160,96,.5);color:#00c870}
+.pill.warn{border-color:rgba(208,128,0,.5);color:#e0a000}
+.pill.err{border-color:rgba(204,34,0,.5);color:#ff4422}
+.pill-dot{width:6px;height:6px;border-radius:50%;background:currentColor;flex-shrink:0}
+.pill.ok .pill-dot{animation:blink 2.5s ease-in-out infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+.sb-r{margin-left:auto;display:flex;align-items:center;gap:14px;flex-shrink:0;padding-left:12px}
+.sb-clock{font-family:var(--mono);font-size:11px;color:#666;white-space:nowrap}
+
+/* NAV */
+#nav{background:var(--bg2);border-bottom:2px solid var(--border);display:flex;padding:0 20px;flex-shrink:0}
+.tab{padding:0 16px;height:42px;display:flex;align-items:center;cursor:pointer;font-size:12px;font-weight:600;color:var(--text3);border-bottom:2px solid transparent;transition:color .15s,border-color .15s;letter-spacing:.5px;text-transform:uppercase;white-space:nowrap}
+.tab:hover{color:var(--text2)}
+.tab.on{color:var(--accent);border-bottom-color:var(--accent)}
+
+/* PAGES */
+.page{display:none;padding:20px;flex:1}
+.page.on{display:block}
+
+/* GRID */
+.g4{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:16px}
+.g3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:16px}
+.g2{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;margin-bottom:16px}
+@media(max-width:900px){.g4{grid-template-columns:repeat(2,1fr)}.g3{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:600px){.g4,.g3,.g2{grid-template-columns:1fr}}
+
+/* CARD */
+.card{background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:16px 18px}
+.clabel{font-family:var(--mono);font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--text3);margin-bottom:6px}
+.cval{font-family:var(--mono);font-size:26px;font-weight:700;color:var(--text);line-height:1.1}
+.csub{font-family:var(--mono);font-size:11px;color:var(--text3);margin-top:4px}
+
+/* SPARKLINE */
+.spark-wrap{position:relative;height:38px;margin-top:9px;border-radius:4px;overflow:hidden}
+.spark-wrap canvas{position:absolute;inset:0;width:100%;height:100%}
+
+/* GAUGE */
+.gbar{height:4px;background:var(--panel2);border-radius:2px;margin-top:7px;overflow:hidden}
+.gfill{height:100%;border-radius:2px;background:var(--accent);transition:width .4s cubic-bezier(.4,0,.2,1)}
+.gfill.mid{background:var(--yellow)}
+.gfill.hi{background:var(--red)}
+
+/* SECTION */
+.sec{font-family:var(--mono);font-size:10px;letter-spacing:2.5px;text-transform:uppercase;color:var(--text3);padding-bottom:10px;border-bottom:1px solid var(--border);margin-bottom:14px}
+
+/* FULL GRAPH */
+.gwrap{position:relative;height:110px;margin-top:8px}
+.gwrap canvas{position:absolute;inset:0;width:100%;height:100%}
+.gmeta{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px}
+.gleg{display:flex;gap:12px}
+.gli{display:flex;align-items:center;gap:5px;font-family:var(--mono);font-size:10px;color:var(--text3)}
+.gldot{width:7px;height:7px;border-radius:50%}
+
+/* SERVICES */
+.svcgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px}
+.svc{display:flex;align-items:center;gap:8px;padding:9px 12px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;font-family:var(--mono);font-size:11px;color:var(--text2)}
+.svc.ok{border-color:rgba(0,160,96,.3)}
+.svc.err{border-color:rgba(204,34,0,.25);color:var(--text3)}
+.svc-ind{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.svc.ok .svc-ind{background:var(--green)}
+.svc.err .svc-ind{background:var(--red)}
+.svc.unk .svc-ind{background:var(--text3)}
+.svc-st{margin-left:auto;font-size:9px;color:var(--text3)}
+
+/* WIFI BADGE */
+.wbadge{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:6px;font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:1px}
+.wbadge.up{background:rgba(0,160,96,.1);color:var(--green);border:1px solid rgba(0,160,96,.3)}
+.wbadge.down{background:rgba(204,34,0,.08);color:var(--red);border:1px solid rgba(204,34,0,.2)}
+.wbadge.none{background:rgba(0,153,204,.08);color:var(--text3);border:1px solid var(--border)}
+.tag{display:inline-block;padding:2px 8px;border-radius:4px;background:rgba(0,153,204,.1);border:1px solid rgba(0,153,204,.25);color:var(--accent);font-family:var(--mono);font-size:10px;font-weight:600}
+
+/* INFO GRID */
+.igrid{display:grid;grid-template-columns:auto 1fr;gap:7px 16px;font-family:var(--mono);font-size:12px}
+.ik{color:var(--text3)}
+.iv{color:var(--text)}
+
+/* TABLE */
+.tbl{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:11px}
+.tbl th{text-align:left;padding:8px 14px;font-weight:400;color:var(--text3);border-bottom:2px solid var(--border);letter-spacing:1.5px;text-transform:uppercase;font-size:10px;background:var(--bg2)}
+.tbl td{padding:10px 14px;border-bottom:1px solid var(--border);color:var(--text2)}
+.tbl tr:last-child td{border-bottom:none}
+.tbl tr:hover td{background:rgba(0,153,204,.05)}
+.tbl .ip{color:var(--accent);font-weight:600}
+.nodata{text-align:center;padding:36px;color:var(--text3);font-family:var(--mono);font-size:12px}
+
+/* FORM */
+.field{margin-bottom:15px}
+label{display:block;font-family:var(--mono);font-size:10px;letter-spacing:1.5px;color:var(--text3);text-transform:uppercase;margin-bottom:6px}
+input[type=text],input[type=password],select{width:100%;background:var(--bg);border:1px solid var(--bord2);border-radius:8px;padding:10px 14px;color:var(--text);font-family:var(--mono);font-size:13px;outline:none;transition:border-color .15s;-webkit-appearance:none}
+input:focus,select:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(0,153,204,.15)}
+select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%230099cc' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 14px center;padding-right:36px;cursor:pointer}
+select option{background:var(--panel)}
+.btn{padding:10px 22px;border:none;border-radius:8px;cursor:pointer;font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:1px;transition:opacity .15s,transform .1s;text-transform:uppercase}
+.btn:hover{opacity:.85}
+.btn:active{transform:scale(.98)}
+.btnp{background:var(--accent);color:#fff}
+.btnd{background:var(--red);color:#fff}
+.btns{background:var(--bg2);color:var(--accent);border:1px solid var(--accent)}
+
+/* STATUS BIG CARDS */
+.status-bigrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
+.stcard{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:16px 14px;display:flex;flex-direction:column;align-items:center;gap:8px;transition:border-color .2s}
+.stcard.st-ok{border-color:rgba(0,160,96,.35);background:rgba(0,160,96,.04)}
+.stcard.st-err{border-color:rgba(204,34,0,.3);background:rgba(204,34,0,.04)}
+.stcard.st-warn{border-color:rgba(208,128,0,.35);background:rgba(208,128,0,.04)}
+.st-icon{font-size:22px}
+.st-name{font-family:var(--mono);font-size:11px;font-weight:600;color:var(--text2);text-align:center}
+.st-badge{font-family:var(--mono);font-size:10px;font-weight:700;padding:3px 10px;border-radius:12px;letter-spacing:.5px}
+.st-badge.st-ok{background:rgba(0,160,96,.12);color:var(--green);border:1px solid rgba(0,160,96,.3)}
+.st-badge.st-err{background:rgba(204,34,0,.1);color:var(--red);border:1px solid rgba(204,34,0,.25)}
+.st-badge.st-warn{background:rgba(208,128,0,.1);color:var(--yellow);border:1px solid rgba(208,128,0,.25)}
+.st-badge.st-unk{background:rgba(0,153,204,.07);color:var(--text3);border:1px solid var(--border)}
+
+/* MODAL */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:5000;display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity .2s}
+.modal-overlay.open{opacity:1;pointer-events:all}
+.modal{background:var(--bg);border:1px solid var(--bord2);border-radius:14px;padding:26px;width:100%;max-width:420px;box-shadow:0 20px 60px rgba(0,0,0,.18);transform:translateY(12px);transition:transform .2s}
+.modal-overlay.open .modal{transform:translateY(0)}
+.modal-title{font-family:var(--mono);font-size:13px;font-weight:700;color:var(--text);margin-bottom:18px;padding-bottom:12px;border-bottom:1px solid var(--border)}
+.modal-actions{display:flex;gap:10px;margin-top:20px}
+.modal-actions .btn{flex:1}
+.ip-static{background:rgba(0,153,204,.1);color:var(--accent);border:1px solid rgba(0,153,204,.3);border-radius:4px;padding:2px 7px;font-size:10px;font-weight:700;font-family:var(--mono)}
+.ip-dhcp{background:rgba(0,160,96,.08);color:var(--green);border:1px solid rgba(0,160,96,.25);border-radius:4px;padding:2px 7px;font-size:10px;font-weight:700;font-family:var(--mono)}
+.assign-btn{background:none;border:1px solid var(--border);border-radius:5px;color:var(--text3);font-family:var(--mono);font-size:10px;padding:3px 8px;cursor:pointer;transition:border-color .15s,color .15s}
+.assign-btn:hover{border-color:var(--accent);color:var(--accent)}
+
+/* TOAST */
+.toast{position:fixed;bottom:24px;right:24px;background:#0a0a0a;border:1px solid #333;border-left:3px solid var(--accent);padding:13px 18px;border-radius:10px;font-family:var(--mono);font-size:12px;color:#fff;z-index:9999;opacity:0;transform:translateY(8px);transition:all .25s;pointer-events:none;max-width:300px}
+.toast.show{opacity:1;transform:translateY(0)}
+.toast.err{border-left-color:var(--red)}
+</style>
+</head>
+<body>
+
+<!-- STATUS BAR -->
+<div id="sb">
+  <div class="sb-brand">
+    <div class="brand-dot green" id="brand-dot"></div>
+    Router <em> OS </em>
+  </div>
+  <div class="pill" id="p-net"><div class="pill-dot"></div><span id="p-net-l">Internet</span></div>
+  <div class="pill" id="p-wifi"><div class="pill-dot"></div><span id="p-wifi-l">WiFi</span></div>
+  <div class="sb-r">
+    <span id="sb-up" style="font-family:var(--mono);font-size:11px;color:#666"></span>
+    <span class="sb-clock" id="sb-time"></span>
+  </div>
+</div>
+
+<!-- NAV -->
+<div id="nav">
+  <div class="tab on" onclick="goPage('overview',this)">Overview</div>
+  <div class="tab"    onclick="goPage('traffic',this)">Traffic</div>
+  <div class="tab"    onclick="goPage('status',this)">Status</div>
+  <div class="tab"    onclick="goPage('clients',this)">Clients</div>
+  <div class="tab"    onclick="goPage('setup',this)">WiFi Setup</div>
+</div>
+
+<!-- ═══ OVERVIEW ═══ -->
+<div class="page on" id="page-overview">
+  <div class="g4">
+    <div class="card">
+      <div class="clabel">Uptime</div>
+      <div class="cval" style="font-size:18px" id="o-up">—</div>
+    </div>
+    <div class="card">
+      <div class="clabel">WAN IP</div>
+      <div class="cval" style="font-size:16px" id="o-ip">—</div>
+      <div class="csub" id="o-iface"></div>
+    </div>
+    <div class="card">
+      <div class="clabel">Load Avg</div>
+      <div class="cval" style="font-size:18px" id="o-load">—</div>
+      <div class="spark-wrap"><canvas id="sp-load"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="clabel">DHCP Clients</div>
+      <div class="cval" id="o-clients">—</div>
+      <div class="csub">active leases</div>
+      <div class="spark-wrap"><canvas id="sp-clients"></canvas></div>
+    </div>
+  </div>
+  <div class="g2">
+    <div class="card">
+      <div class="clabel">CPU</div>
+      <div style="display:flex;align-items:baseline;gap:6px">
+        <div class="cval" id="o-cpu">—</div><div class="csub" style="margin:0">%</div>
+      </div>
+      <div class="gbar"><div class="gfill" id="o-cpu-b" style="width:0"></div></div>
+      <div class="spark-wrap"><canvas id="sp-cpu"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="clabel">Memory</div>
+      <div style="display:flex;align-items:baseline;gap:6px">
+        <div class="cval" id="o-mem">—</div><div class="csub" style="margin:0">%</div>
+      </div>
+      <div class="gbar"><div class="gfill" id="o-mem-b" style="width:0"></div></div>
+      <div class="csub" id="o-mem-s" style="margin-top:5px"></div>
+      <div class="spark-wrap"><canvas id="sp-mem"></canvas></div>
+    </div>
+  </div>
+  <div class="g2">
+    <div class="card">
+      <div class="sec">Internal WiFi</div>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+        <div class="wbadge none" id="o-wb">NO CARD</div>
+        <span class="tag" id="o-wiface" style="display:none"></span>
+      </div>
+      <div class="igrid">
+        <span class="ik">SSID</span>   <span class="iv" id="o-ssid">—</span>
+        <span class="ik">Bridge</span> <span class="iv" id="o-bridge">—</span>
+        <span class="ik">Channel</span><span class="iv" id="o-chan">—</span>
+      </div>
+    </div>
+    <div class="card">
+      <div class="sec">Traffic Totals</div>
+      <div class="igrid">
+        <span class="ik">WAN ↓</span>   <span class="iv" id="o-wrx">—</span>
+        <span class="ik">WAN ↑</span>   <span class="iv" id="o-wtx">—</span>
+        <span class="ik">Admin ↓</span> <span class="iv" id="o-arx">—</span>
+        <span class="ik">Admin ↑</span> <span class="iv" id="o-atx">—</span>
+        <span class="ik">User ↓</span>  <span class="iv" id="o-urx">—</span>
+        <span class="ik">User ↑</span>  <span class="iv" id="o-utx">—</span>
+      </div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="sec">Services</div>
+    <div class="svcgrid" id="o-svcs"></div>
+  </div>
+</div>
+
+<!-- ═══ TRAFFIC ═══ -->
+<div class="page" id="page-traffic">
+  <div class="g4" style="margin-bottom:16px">
+    <div class="card">
+      <div class="clabel">WAN RX Rate</div>
+      <div class="cval" style="font-size:18px" id="t-rx">—</div>
+      <div class="spark-wrap"><canvas id="sp-rx"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="clabel">WAN TX Rate</div>
+      <div class="cval" style="font-size:18px" id="t-tx">—</div>
+      <div class="spark-wrap"><canvas id="sp-tx"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="clabel">CPU %</div>
+      <div class="cval" style="font-size:18px" id="t-cpu">—</div>
+      <div class="spark-wrap"><canvas id="sp-cpu2"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="clabel">RAM %</div>
+      <div class="cval" style="font-size:18px" id="t-mem">—</div>
+      <div class="spark-wrap"><canvas id="sp-mem2"></canvas></div>
+    </div>
+  </div>
+  <div class="g2" style="margin-bottom:16px">
+    <div class="card">
+      <div class="gmeta">
+        <div class="clabel" style="margin:0">CPU % — 60s</div>
+        <div class="gleg"><div class="gli"><div class="gldot" style="background:var(--accent)"></div><span id="tg-cpu">—</span></div></div>
+      </div>
+      <div class="gwrap"><canvas id="g-cpu"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="gmeta">
+        <div class="clabel" style="margin:0">RAM % — 60s</div>
+        <div class="gleg"><div class="gli"><div class="gldot" style="background:var(--blue)"></div><span id="tg-mem">—</span></div></div>
+      </div>
+      <div class="gwrap"><canvas id="g-mem"></canvas></div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="gmeta">
+      <div class="clabel" style="margin:0">WAN Throughput — 60s</div>
+      <div class="gleg">
+        <div class="gli"><div class="gldot" style="background:var(--accent)"></div>RX</div>
+        <div class="gli"><div class="gldot" style="background:var(--blue)"></div>TX</div>
+      </div>
+    </div>
+    <div class="gwrap" style="height:130px"><canvas id="g-wan"></canvas></div>
+  </div>
+</div>
+
+<!-- ═══ STATUS ═══ -->
+<div class="page" id="page-status">
+  <div class="card" style="margin-bottom:16px">
+    <div class="sec">Network Connectivity</div>
+    <div class="status-bigrid">
+      <div class="stcard" id="st-internet">
+        <div class="st-icon">🌐</div><div class="st-name">Internet</div>
+        <div class="st-badge st-unk" id="st-internet-b">—</div>
+      </div>
+      <div class="stcard" id="st-wifi-card">
+        <div class="st-icon">📶</div><div class="st-name">WiFi</div>
+        <div class="st-badge st-unk" id="st-wifi-b">—</div>
+      </div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="sec">System Services</div>
+    <div class="status-bigrid">
+      <div class="stcard" id="stc-nftables"><div class="st-icon">🛡️</div><div class="st-name">Firewall</div><div class="st-badge st-unk">—</div></div>
+      <div class="stcard" id="stc-dnsmasq"><div class="st-icon">🔍</div><div class="st-name">DNS / DHCP</div><div class="st-badge st-unk">—</div></div>
+      <div class="stcard" id="stc-adguardhome"><div class="st-icon">🚫</div><div class="st-name">AdGuard</div><div class="st-badge st-unk">—</div></div>
+      <div class="stcard" id="stc-nginx"><div class="st-icon">🌍</div><div class="st-name">Web Server</div><div class="st-badge st-unk">—</div></div>
+      <div class="stcard" id="stc-hostapd"><div class="st-icon">📡</div><div class="st-name">hostapd</div><div class="st-badge st-unk">—</div></div>
+      <div class="stcard" id="stc-ttyd"><div class="st-icon">💻</div><div class="st-name">Terminal</div><div class="st-badge st-unk">—</div></div>
+      <div class="stcard" id="stc-wireguard"><div class="st-icon">🔒</div><div class="st-name">WireGuard</div><div class="st-badge st-unk">—</div></div>
+      <div class="stcard" id="stc-vnstat"><div class="st-icon">📊</div><div class="st-name">vnstat</div><div class="st-badge st-unk">—</div></div>
+      <div class="stcard" id="stc-router-stats-api"><div class="st-icon">⚙️</div><div class="st-name">Stats API</div><div class="st-badge st-unk">—</div></div>
+      <div class="stcard" id="stc-router-wifi-api"><div class="st-icon">📲</div><div class="st-name">WiFi API</div><div class="st-badge st-unk">—</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ CLIENTS ═══ -->
+<div class="page" id="page-clients">
+  <div class="card">
+    <div class="sec">DHCP Leases &amp; IP Assignment</div>
+    <div style="margin-bottom:12px;font-family:var(--mono);font-size:11px;color:var(--text3)">
+      Click <strong style="color:var(--accent)">Assign IP</strong> on any device to override DHCP with a static reservation.
+    </div>
+    <div id="leases"><div class="nodata">Loading…</div></div>
+  </div>
+  <div class="card" style="margin-top:16px">
+    <div class="sec">Static DHCP Reservations</div>
+    <div id="reservations-list"><div class="nodata">No static reservations configured.</div></div>
+  </div>
+</div>
+
+<!-- ═══ WIFI SETUP ═══ -->
+<div class="page" id="page-setup">
+  <div class="g2">
+    <div class="card">
+      <div class="sec">WiFi Configuration</div>
+      <div class="field"><label>SSID</label><input type="text" id="f-ssid" placeholder="RouterOS" maxlength="32"></div>
+      <div class="field"><label>Password (min 8 chars)</label><input type="password" id="f-pass" placeholder="••••••••"></div>
+      <div class="field"><label>Security</label>
+        <select id="f-sec"><option value="wpa2">WPA2-PSK</option><option value="wpa3">WPA3-SAE</option></select></div>
+      <div class="field"><label>Bridge VLAN</label>
+        <select id="f-vlan"><option value="user">User VLAN (192.168.20.x)</option><option value="admin">Admin VLAN (192.168.10.x)</option></select></div>
+      <button class="btn btnp" onclick="applyWifi()">Apply Settings</button>
+    </div>
+    <div>
+      <div class="card" style="margin-bottom:14px">
+        <div class="sec">Current WiFi Status</div>
+        <div id="wstatus" style="font-family:var(--mono);font-size:12px;color:var(--text3)">Loading…</div>
+      </div>
+      <div class="card">
+        <div class="sec">Change Admin Password</div>
+        <div class="field"><label>New Password</label><input type="password" id="ap1" placeholder="••••••••"></div>
+        <div class="field"><label>Confirm</label><input type="password" id="ap2" placeholder="••••••••"></div>
+        <button class="btn btnd" onclick="applyAdminPass()">Change Password</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- IP MODAL -->
+<div class="modal-overlay" id="ip-modal" onclick="closeModal(event)">
+  <div class="modal">
+    <div class="modal-title" id="modal-title">Assign Static IP</div>
+    <div class="field"><label>Device (MAC)</label><input type="text" id="m-mac" readonly style="background:var(--bg2);color:var(--text3)"></div>
+    <div class="field"><label>Hostname</label><input type="text" id="m-host" placeholder="my-device"></div>
+    <div class="field"><label>Static IP Address</label><input type="text" id="m-ip" placeholder="192.168.20.100"></div>
+    <div class="field"><label>VLAN / Subnet</label>
+      <select id="m-vlan">
+        <option value="user">User VLAN — 192.168.20.x</option>
+        <option value="admin">Admin VLAN — 192.168.10.x</option>
+      </select></div>
+    <div style="font-family:var(--mono);font-size:10px;color:var(--text3);background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:8px 12px;margin-bottom:4px">
+      ⚠ Creates a <code>dhcp-host</code> entry in dnsmasq. Device must reconnect to receive the new IP.
+    </div>
+    <div class="modal-actions">
+      <button class="btn btns" onclick="closeModal()">Cancel</button>
+      <button class="btn btnp" onclick="saveReservation()">Save Reservation</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ── Config ─────────────────────────────────────────────────────────────────────
+const POLL = 500;   // poll every 500ms
+const MAX  = 120;   // 60s of history at 0.5s resolution
+const H = {cpu:[],mem:[],rx:[],tx:[],load:[],clients:[]};
+let lastRx=null, lastTx=null;
+let reservations={};
+try{reservations=JSON.parse(localStorage.getItem('dhcp_reservations')||'{}');}catch(e){}
+
+const SVCS={
+  nftables:'Firewall',dnsmasq:'dnsmasq',adguardhome:'AdGuard',
+  nginx:'nginx',hostapd:'hostapd',ttyd:'Terminal',
+  wireguard:'WireGuard',vnstat:'vnstat',
+  'router-stats-api':'Stats API','router-wifi-api':'WiFi API'
+};
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+const $=id=>document.getElementById(id);
+const push=(a,v)=>{a.push(v);if(a.length>MAX)a.shift();};
+function fb(b){
+  if(b==null)return'—';
+  if(b<1024)return b+'B';
+  if(b<1<<20)return(b/1024).toFixed(1)+'KB';
+  if(b<1<<30)return(b/(1<<20)).toFixed(1)+'MB';
+  return(b/(1<<30)).toFixed(2)+'GB';
+}
+function fr(bps){
+  if(!bps||bps<0)return'0B/s';
+  if(bps<1024)return bps.toFixed(0)+'B/s';
+  if(bps<1<<20)return(bps/1024).toFixed(1)+'KB/s';
+  return(bps/(1<<20)).toFixed(2)+'MB/s';
+}
+function gauge(id,pct){
+  const e=$(id);if(!e)return;
+  e.style.width=pct+'%';
+  e.className='gfill'+(pct>90?' hi':pct>70?' mid':'');
+}
+function pill(id,state,label){
+  const e=$(id);if(!e)return;
+  e.className='pill '+state;
+  if(label){const s=e.querySelector('span');if(s)s.textContent=label;}
+}
+
+// ── Clock ─────────────────────────────────────────────────────────────────────
+setInterval(()=>$('sb-time').textContent=new Date().toLocaleTimeString(),1000);
+$('sb-time').textContent=new Date().toLocaleTimeString();
+
+// ── Nav ───────────────────────────────────────────────────────────────────────
+function goPage(name,el){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('on'));
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('on'));
+  $('page-'+name).classList.add('on');
+  if(el)el.classList.add('on');
+  if(name==='setup')fetchWifi();
+  requestAnimationFrame(drawAll);
+}
+
+// ── Brand dot: green=all ok, yellow=web/adguard down, red=no wifi/crit down ──
+function updateBrandDot(svcs,hasNet,iface,hapUp){
+  const dot=$('brand-dot');
+  const noWifi=!iface||iface==='none'||!hapUp;
+  const critDown=!hasNet||svcs.nftables!=='active'||svcs.dnsmasq!=='active';
+  const warnDown=svcs.nginx!=='active'||svcs.adguardhome!=='active';
+  if(critDown||noWifi) dot.className='brand-dot red';
+  else if(warnDown)    dot.className='brand-dot yellow';
+  else                 dot.className='brand-dot green';
+}
+
+// ── Update UI ─────────────────────────────────────────────────────────────────
+function updateUI(d){
+  const cpu=d.cpu_pct||0;
+  const mt=d.memory?.total_kb||0, mu=d.memory?.used_kb||0;
+  const mp=mt?Math.round(mu/mt*100):0;
+  const nClients=(d.dhcp_leases||[]).length;
+  const nrx=d.wan?.rx_bytes||0, ntx=d.wan?.tx_bytes||0;
+  const rxr=lastRx!==null?Math.max(0,(nrx-lastRx)/(POLL/1000)):0;
+  const txr=lastTx!==null?Math.max(0,(ntx-lastTx)/(POLL/1000)):0;
+  lastRx=nrx; lastTx=ntx;
+  const loadVal=parseFloat((d.load||'0').split(' ')[0])||0;
+
+  push(H.cpu,cpu); push(H.mem,mp); push(H.rx,rxr); push(H.tx,txr);
+  push(H.load,loadVal); push(H.clients,nClients);
+
+  // Overview
+  $('o-up').textContent=d.uptime||'—';
+  $('o-ip').textContent=d.wan?.ip||'—';
+  $('o-iface').textContent=d.wan?.interface?'⬡ '+d.wan.interface:'';
+  $('o-load').textContent=d.load||'—';
+  $('o-clients').textContent=nClients;
+  $('o-cpu').textContent=cpu;
+  $('o-mem').textContent=mp;
+  $('o-mem-s').textContent=fb(mu*1024)+' / '+fb(mt*1024);
+  gauge('o-cpu-b',cpu); gauge('o-mem-b',mp);
+  $('o-wrx').textContent=fb(d.wan?.rx_bytes);
+  $('o-wtx').textContent=fb(d.wan?.tx_bytes);
+  $('o-arx').textContent=fb(d.admin_vlan?.rx_bytes);
+  $('o-atx').textContent=fb(d.admin_vlan?.tx_bytes);
+  $('o-urx').textContent=fb(d.user_vlan?.rx_bytes);
+  $('o-utx').textContent=fb(d.user_vlan?.tx_bytes);
+
+  // WiFi badge
+  const iface=d.wifi?.interface, ssid=d.wifi?.ssid;
+  const hapUp=d.services?.hostapd==='active';
+  const wb=$('o-wb'),wit=$('o-wiface');
+  if(!iface||iface==='none'){wb.className='wbadge none';wb.textContent='NO CARD';wit.style.display='none';}
+  else if(!hapUp){wb.className='wbadge down';wb.textContent='DOWN';wit.textContent=iface;wit.style.display='';}
+  else{wb.className='wbadge up';wb.textContent='BROADCASTING';wit.textContent=iface;wit.style.display='';}
+  $('o-ssid').textContent=ssid||'—';
+  $('o-bridge').textContent=d.wifi?.bridge||'—';
+  $('o-chan').textContent=d.wifi?.channel||'—';
+
+  // Services
+  const svcs=d.services||{};
+  $('o-svcs').innerHTML=Object.entries(SVCS).map(([k,label])=>{
+    const s=svcs[k]||'unknown';
+    const c=s==='active'?'ok':s==='inactive'?'err':'unk';
+    return`<div class="svc ${c}"><div class="svc-ind"></div>${label}<span class="svc-st">${s}</span></div>`;
+  }).join('');
+
+  // Traffic tab
+  $('t-rx').textContent=fr(rxr); $('t-tx').textContent=fr(txr);
+  $('t-cpu').textContent=cpu+'%'; $('t-mem').textContent=mp+'%';
+  $('tg-cpu').textContent=cpu+'%'; $('tg-mem').textContent=mp+'%';
+
+  // Status tab + brand dot
+  const hasNet=!!(d.wan?.ip&&d.wan.ip!=='unknown');
+  updateStatusCards(svcs,hasNet,iface,hapUp,ssid);
+  updateBrandDot(svcs,hasNet,iface,hapUp);
+
+  // Status bar
+  $('sb-up').textContent=d.uptime||'';
+  pill('p-net',hasNet?'ok':'err',hasNet?'Internet ✓':'No Internet');
+  if(!iface||iface==='none')pill('p-wifi','warn','WiFi — no card');
+  else if(!hapUp)pill('p-wifi','err',`WiFi ✗ ${iface}`);
+  else pill('p-wifi','ok',ssid?`WiFi ✓ ${ssid}`:'WiFi ✓');
+
+  renderLeases(d.dhcp_leases||[]);
+  drawAll();
+}
+
+// ── Status tab ────────────────────────────────────────────────────────────────
+function setSvc(id,state,label){
+  const c=$('stc-'+id);if(!c)return;
+  c.className='stcard st-'+state;
+  const b=c.querySelector('.st-badge');
+  if(b){b.className='st-badge st-'+state;b.textContent=label.toUpperCase();}
+}
+function updateStatusCards(svcs,hasNet,iface,hapUp,ssid){
+  const si=$('st-internet'),sib=$('st-internet-b');
+  if(si&&sib){const s=hasNet?'ok':'err';si.className='stcard st-'+s;sib.className='st-badge st-'+s;sib.textContent=hasNet?'ONLINE':'OFFLINE';}
+  const sw=$('st-wifi-card'),swb=$('st-wifi-b');
+  if(sw&&swb){
+    const ws=!iface||iface==='none'?'warn':hapUp?'ok':'err';
+    const wl=!iface||iface==='none'?'NO CARD':hapUp?(ssid||'UP'):'DOWN';
+    sw.className='stcard st-'+ws;swb.className='st-badge st-'+ws;swb.textContent=wl;
+  }
+  const m={
+    nftables:svcs.nftables==='active'?'ok':'err',
+    dnsmasq:svcs.dnsmasq==='active'?'ok':'err',
+    adguardhome:svcs.adguardhome==='active'?'ok':'warn',
+    nginx:svcs.nginx==='active'?'ok':'err',
+    hostapd:svcs.hostapd==='active'?'ok':'warn',
+    ttyd:svcs.ttyd==='active'?'ok':'warn',
+    wireguard:svcs.wireguard==='active'?'ok':'warn',
+    vnstat:svcs.vnstat==='active'?'ok':'warn',
+    'router-stats-api':svcs['router-stats-api']==='active'?'ok':'err',
+    'router-wifi-api':svcs['router-wifi-api']==='active'?'ok':'err'
+  };
+  Object.entries(m).forEach(([k,state])=>{
+    const s=svcs[k]||'unknown';
+    setSvc(k,state,s==='active'?'running':s==='inactive'?'stopped':'unknown');
+  });
+}
+
+// ── Leases ────────────────────────────────────────────────────────────────────
+function renderLeases(leases){
+  if(!leases.length){$('leases').innerHTML='<div class="nodata">No DHCP leases</div>';return;}
+  $('leases').innerHTML=`<table class="tbl"><thead><tr>
+    <th>IP</th><th>MAC</th><th>Hostname</th><th>Expires</th><th>Type</th><th>Action</th>
+  </tr></thead><tbody>${leases.map(l=>{
+    const res=reservations[l.mac];
+    const badge=res?'<span class="ip-static">STATIC</span>':'<span class="ip-dhcp">DHCP</span>';
+    const ip=res?res.ip:l.ip;
+    const host=l.host==='*'?'<span style="color:var(--text3)">unknown</span>':l.host;
+    return`<tr><td class="ip">${ip}</td><td>${l.mac}</td><td>${host}</td>
+      <td>${new Date(l.expires*1000).toLocaleTimeString()}</td>
+      <td>${badge}</td>
+      <td><button class="assign-btn" onclick="openModal('${l.mac}','${l.ip}','${l.host==='*'?'':l.host}')">Assign IP</button></td></tr>`;
+  }).join('')}</tbody></table>`;
+  renderReservations();
+}
+function renderReservations(){
+  const keys=Object.keys(reservations);
+  if(!keys.length){$('reservations-list').innerHTML='<div class="nodata">No static reservations configured.</div>';return;}
+  $('reservations-list').innerHTML=`<table class="tbl"><thead><tr>
+    <th>Static IP</th><th>MAC</th><th>Hostname</th><th>VLAN</th><th>Action</th>
+  </tr></thead><tbody>${keys.map(mac=>{
+    const r=reservations[mac];
+    return`<tr><td class="ip">${r.ip}</td><td>${mac}</td><td>${r.host||'—'}</td>
+      <td><span class="tag">${r.vlan||'user'}</span></td>
+      <td><button class="assign-btn" style="color:var(--red);border-color:rgba(204,34,0,.3)" onclick="removeReservation('${mac}')">Remove</button></td></tr>`;
+  }).join('')}</tbody></table>`;
+}
+
+// ── Modal ─────────────────────────────────────────────────────────────────────
+function openModal(mac,ip,host){
+  $('m-mac').value=mac;
+  $('m-ip').value=reservations[mac]?.ip||ip;
+  $('m-host').value=reservations[mac]?.host||host;
+  if(reservations[mac]?.vlan)$('m-vlan').value=reservations[mac].vlan;
+  $('modal-title').textContent='Assign Static IP — '+mac;
+  $('ip-modal').classList.add('open');
+}
+function closeModal(e){if(e&&e.target!==$('ip-modal'))return;$('ip-modal').classList.remove('open');}
+function saveReservation(){
+  const mac=$('m-mac').value.trim(),ip=$('m-ip').value.trim();
+  const host=$('m-host').value.trim(),vlan=$('m-vlan').value;
+  if(!ip||!/^\d{1,3}(\.\d{1,3}){3}$/.test(ip)){toast('Enter a valid IP address',1);return;}
+  reservations[mac]={ip,host,vlan};
+  try{localStorage.setItem('dhcp_reservations',JSON.stringify(reservations));}catch(e){}
+  fetch('/api/dhcp/reserve',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mac,ip,host,vlan})})
+    .then(r=>r.json()).then(d=>d.ok?toast(`Reserved ${ip} for ${mac}`):toast(d.error||'Saved locally',0))
+    .catch(()=>toast('Saved locally — API unreachable',0));
+  $('ip-modal').classList.remove('open');
+  renderReservations();
+}
+function removeReservation(mac){
+  delete reservations[mac];
+  try{localStorage.setItem('dhcp_reservations',JSON.stringify(reservations));}catch(e){}
+  fetch('/api/dhcp/reserve',{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({mac})}).catch(()=>{});
+  toast('Reservation removed');
+  renderReservations();
+}
+
+// ── Sparkline ─────────────────────────────────────────────────────────────────
+function drawSpark(id,pts,color,yMax){
+  const c=$(id);if(!c||!pts.length)return;
+  const dpr=Math.min(window.devicePixelRatio||1,2);
+  const W=c.parentElement.offsetWidth||200,H=38;
+  c.width=W*dpr;c.height=H*dpr;
+  const ctx=c.getContext('2d');ctx.scale(dpr,dpr);
+  ctx.clearRect(0,0,W,H);
+  const mx=yMax||Math.max(...pts,1);
+  const step=W/(MAX-1),off=(MAX-pts.length)*step;
+  const x=i=>off+i*step,y=v=>H-2-(v/mx)*(H-5);
+  const g=ctx.createLinearGradient(0,0,0,H);
+  g.addColorStop(0,color+'55');g.addColorStop(1,color+'00');
+  ctx.beginPath();ctx.moveTo(x(0),H);
+  pts.forEach((v,i)=>ctx.lineTo(x(i),y(v)));
+  ctx.lineTo(x(pts.length-1),H);ctx.closePath();ctx.fillStyle=g;ctx.fill();
+  ctx.beginPath();ctx.strokeStyle=color;ctx.lineWidth=1.5;ctx.lineJoin='round';
+  pts.forEach((v,i)=>i===0?ctx.moveTo(x(i),y(v)):ctx.lineTo(x(i),y(v)));
+  ctx.stroke();
+}
+
+// ── Full graph ────────────────────────────────────────────────────────────────
+function drawGraph(id,datasets,yMax){
+  const c=$(id);if(!c)return;
+  const dpr=Math.min(window.devicePixelRatio||1,2);
+  const W=c.parentElement.offsetWidth||600,Hpx=c.parentElement.offsetHeight||110;
+  c.width=W*dpr;c.height=Hpx*dpr;
+  const ctx=c.getContext('2d');ctx.scale(dpr,dpr);
+  ctx.clearRect(0,0,W,Hpx);
+  ctx.strokeStyle='#b3d9ee';ctx.lineWidth=1;
+  for(let i=0;i<=4;i++){const y=Math.round(Hpx/4*i)+.5;ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+  const mx=yMax||Math.max(...datasets.flatMap(d=>d.pts),1);
+  datasets.forEach(({pts,color})=>{
+    if(pts.length<2)return;
+    const step=W/(MAX-1),off=(MAX-pts.length)*step;
+    const x=i=>off+i*step,y=v=>Hpx-(v/mx)*(Hpx-6);
+    const g=ctx.createLinearGradient(0,0,0,Hpx);
+    g.addColorStop(0,color+'40');g.addColorStop(1,color+'05');
+    ctx.beginPath();ctx.moveTo(x(0),Hpx);
+    pts.forEach((v,i)=>ctx.lineTo(x(i),y(v)));
+    ctx.lineTo(x(pts.length-1),Hpx);ctx.closePath();ctx.fillStyle=g;ctx.fill();
+    ctx.beginPath();ctx.strokeStyle=color;ctx.lineWidth=2;ctx.lineJoin='round';
+    pts.forEach((v,i)=>i===0?ctx.moveTo(x(i),y(v)):ctx.lineTo(x(i),y(v)));
+    ctx.stroke();
+  });
+}
+
+function drawAll(){
+  drawSpark('sp-cpu',H.cpu,'#0099cc',100);
+  drawSpark('sp-mem',H.mem,'#005f8e',100);
+  drawSpark('sp-load',H.load,'#0099cc');
+  drawSpark('sp-clients',H.clients,'#005f8e');
+  drawSpark('sp-rx',H.rx,'#0099cc');
+  drawSpark('sp-tx',H.tx,'#005f8e');
+  drawSpark('sp-cpu2',H.cpu,'#0099cc',100);
+  drawSpark('sp-mem2',H.mem,'#005f8e',100);
+  drawGraph('g-cpu',[{pts:H.cpu,color:'#0099cc'}],100);
+  drawGraph('g-mem',[{pts:H.mem,color:'#005f8e'}],100);
+  const m=Math.max(...H.rx,...H.tx,1);
+  drawGraph('g-wan',[{pts:H.rx,color:'#0099cc'},{pts:H.tx,color:'#005f8e'}],m);
+}
+window.addEventListener('resize',drawAll);
+
+// ── Poll ──────────────────────────────────────────────────────────────────────
+async function poll(){
+  try{
+    const r=await fetch('/api/stats',{cache:'no-store'});
+    updateUI(await r.json());
+  }catch(e){
+    pill('p-net','err','Offline');
+    $('brand-dot').className='brand-dot red';
+  }
+}
+poll();setInterval(poll,POLL);
+
+// ── WiFi API ──────────────────────────────────────────────────────────────────
+async function fetchWifi(){
+  try{
+    const r=await fetch('/api/wifi/status');
+    const d=await r.json();
+    const el=$('wstatus');
+    if(d.error){el.innerHTML=`<span style="color:var(--red)">${d.error}</span>`;return;}
+    el.innerHTML=`<div style="display:grid;gap:8px">
+      <div>SSID: <span style="color:var(--accent)">${d.ssid||'—'}</span></div>
+      <div>Interface: <span class="tag">${d.interface||'—'}</span></div>
+      <div>Security: ${(d.security||'').toUpperCase()}</div>
+      <div>Bridge: <span class="tag">${d.bridge||'—'}</span></div>
+      <div>Status: <span style="color:${d.active?'var(--green)':'var(--red)'}">
+        ${d.active?'Broadcasting':'Not running'}</span></div></div>`;
+    $('f-ssid').value=d.ssid||'';
+    if(d.security)$('f-sec').value=d.security;
+  }catch(e){$('wstatus').innerHTML='<span style="color:var(--red)">Cannot reach WiFi API</span>';}
+}
+async function applyWifi(){
+  const ssid=$('f-ssid').value.trim(),pass=$('f-pass').value;
+  const sec=$('f-sec').value,vlan=$('f-vlan').value;
+  if(!ssid){toast('SSID cannot be empty',1);return;}
+  if(pass.length<8){toast('Password must be 8+ characters',1);return;}
+  try{
+    const r=await fetch('/api/wifi/configure',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ssid,password:pass,security:sec,vlan})});
+    const d=await r.json();
+    d.ok?toast('WiFi updated! '+d.message):toast(d.error||'Failed',1);
+    if(d.ok)fetchWifi();
+  }catch(e){toast('Request failed',1);}
+}
+async function applyAdminPass(){
+  const p1=$('ap1').value,p2=$('ap2').value;
+  if(p1.length<8){toast('Password must be 8+ characters',1);return;}
+  if(p1!==p2){toast('Passwords do not match',1);return;}
+  try{
+    const r=await fetch('/api/wifi/admin-password',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:p1})});
+    const d=await r.json();
+    d.ok?toast('Admin password updated'):toast(d.error||'Failed',1);
+    if(d.ok){$('ap1').value=$('ap2').value='';}
+  }catch(e){toast('Request failed',1);}
+}
+
+// ── Toast ─────────────────────────────────────────────────────────────────────
+let _tt;
+function toast(msg,err){
+  const e=$('toast');
+  e.textContent=msg;
+  e.className='toast show'+(err?' err':'');
+  clearTimeout(_tt);
+  _tt=setTimeout(()=>e.classList.remove('show'),3500);
+}
+</script>
+</body>
+</html>
